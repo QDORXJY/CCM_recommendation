@@ -2,22 +2,22 @@ import streamlit as st
 import pandas as pd
 import urllib.parse
 
-# 1. 페이지 기본 설정
 st.set_page_config(page_title="CCM Search Pro", layout="wide")
 
-# 2. 글씨 크기 1.5배 증폭 및 레이아웃 최적화 CSS
+# [수정됨] 표(Dataframe) 렌더링을 망가뜨리던 전체 폰트 확대 코드를 제거하고, 
+# 사이드바와 제목 등 안전한 곳에만 크기 확장을 적용합니다.
 st.markdown("""
     <style>
-    html, body, [data-testid="stAppViewContainer"] {
-        font-size: 1.4rem !important;
+    /* 사이드바 글씨 크기 약간 확대 */
+    [data-testid="stSidebar"] * {
+        font-size: 1.1rem !important;
     }
-    [data-testid="stSidebar"] {
-        font-size: 1.2rem !important;
-    }
+    /* 제목 크기 및 여백 최적화 */
     h1 {
-        font-size: 2.8rem !important;
-        padding-bottom: 2rem;
+        font-size: 2.5rem !important;
+        padding-bottom: 1rem;
     }
+    /* 하단 찌부 방지 (전체 너비 사용) */
     .block-container {
         padding-top: 2rem !important;
         padding-bottom: 0rem !important;
@@ -28,25 +28,20 @@ st.markdown("""
 
 st.title("CCM 찬양 검색 대시보드")
 
-# 3. 데이터 로드 및 전처리
 @st.cache_data
 def load_data():
-    # 업로드된 파일명으로 매핑
     df = pd.read_csv("ccm_database_keywords_popularity_labeled.csv")
     
-    # 결측치 방지
     df['keyword_1'] = df['keyword_1'].fillna('-')
     df['keyword_2'] = df['keyword_2'].fillna('-')
     df['keyword_3'] = df['keyword_3'].fillna('-')
     df['popularity_score'] = df['popularity_score'].fillna(0).astype(int)
     df['popularity_label'] = df['popularity_label'].fillna('unknown')
     
-    # 인지도 등급(및 점수) 통합 컬럼 생성
     df['인지도 등급(점수)'] = df.apply(
         lambda row: f"{row['popularity_label'].upper()} ({row['popularity_score']}점)", axis=1
     )
     
-    # API 불필요, 봇 차단 우회용 유튜브 검색 URL 동적 생성
     df['youtube_url'] = df.apply(
         lambda row: "https://www.youtube.com/results?search_query=" + 
                     urllib.parse.quote(f"{row['artist']} {row['title']} official"), axis=1
@@ -57,14 +52,12 @@ def load_data():
 try:
     df = load_data()
 except FileNotFoundError:
-    st.error("ccm_database_keywords_popularity_labeled.csv 파일을 찾을 수 없습니다. 파일명을 확인하십시오.")
+    st.error("ccm_database_keywords_popularity_labeled.csv 파일을 찾을 수 없습니다.")
     st.stop()
 
-# 4. 사이드바 검색 및 필터 구조
 st.sidebar.header("검색 필터")
 search_text = st.sidebar.text_input("제목 또는 아티스트 검색")
 
-# 검색을 위한 고유 키워드 풀 추출
 all_keywords = set()
 for col in ['keyword_1', 'keyword_2', 'keyword_3']:
     for k in df[col].dropna().unique():
@@ -72,9 +65,8 @@ for col in ['keyword_1', 'keyword_2', 'keyword_3']:
             all_keywords.add(k.strip())
 keyword_list = sorted(list(all_keywords))
 
-selected_keyword = st.sidebar.selectbox("핵심 키워드 필터 (전체 검색)", ["전체"] + keyword_list)
+selected_keywords = st.sidebar.multiselect("핵심 키워드 선택 (다중 선택 가능)", keyword_list)
 
-# 5. 데이터 필터링 로직
 filtered_df = df.copy()
 
 if search_text:
@@ -83,17 +75,16 @@ if search_text:
         filtered_df['artist'].str.contains(search_text, case=False, na=False)
     ]
 
-if selected_keyword != "전체":
-    filtered_df = filtered_df[
-        (filtered_df['keyword_1'] == selected_keyword) |
-        (filtered_df['keyword_2'] == selected_keyword) |
-        (filtered_df['keyword_3'] == selected_keyword)
-    ]
+if selected_keywords:
+    for kw in selected_keywords:
+        filtered_df = filtered_df[
+            (filtered_df['keyword_1'] == kw) |
+            (filtered_df['keyword_2'] == kw) |
+            (filtered_df['keyword_3'] == kw)
+        ]
 
-# 인지도 높은 순 기본 정렬
 filtered_df = filtered_df.sort_values(by="popularity_score", ascending=False)
 
-# 6. 요구사항에 맞춘 컬럼 매핑
 display_cols = {
     'artist': '아티스트',
     'title': '곡 제목',
@@ -109,7 +100,6 @@ render_df = filtered_df[list(display_cols.keys())].rename(columns=display_cols)
 
 st.write(f"#### 🔍 검색 결과: 총 {len(render_df)}곡")
 
-# 7. 화면 배치 고도화 (찌부 현상 방지 및 링크 컬럼 설정)
 st.dataframe(
     render_df,
     column_config={
