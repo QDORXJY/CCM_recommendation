@@ -22,7 +22,7 @@ st.title("CCM 찬양 검색 대시보드")
 # 3. 데이터 로드 및 전처리
 @st.cache_data
 def load_data():
-    df = pd.read_csv("ccm_database_structured_lyrics.csv")
+    df = pd.read_csv("ccm_database_keywords_popularity_labeled.csv")
     
     df['keyword_1'] = df['keyword_1'].fillna('-')
     df['keyword_2'] = df['keyword_2'].fillna('-')
