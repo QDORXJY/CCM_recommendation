@@ -6,7 +6,7 @@ import re
 # 1. 페이지 기본 설정
 st.set_page_config(page_title="CCM Search Pro", layout="wide")
 
-# 2. 레이아웃 CSS (표 렌더링 붕괴 방지를 위해 폰트 강제 확대 기능 제거)
+# 2. 레이아웃 CSS
 st.markdown("""
     <style>
     .block-container {
@@ -49,7 +49,8 @@ except FileNotFoundError:
 
 # 4. 사이드바 UI
 st.sidebar.header("검색 필터")
-search_text = st.sidebar.text_input("제목 또는 아티스트 검색")
+# 검색 범위를 가사까지 확장했음을 명시
+search_text = st.sidebar.text_input("제목, 아티스트 또는 가사 검색")
 
 all_keywords = set()
 for col in ['keyword_1', 'keyword_2', 'keyword_3']:
@@ -64,17 +65,16 @@ filtered_df = df.copy()
 
 # 5. 데이터 필터링 및 정렬
 
-# [수정 1] 띄어쓰기 무시 검색 로직 (모든 공백 제거 후 비교)
+# [수정됨] 단어(Token) 단위 분할 및 가사 포함 검색 로직
 if search_text:
-    search_text_clean = re.sub(r'\s+', '', search_text)
+    search_tokens = search_text.split() # 띄어쓰기 기준으로 단어 분리
     
-    temp_title = filtered_df['title'].astype(str).str.replace(r'\s+', '', regex=True)
-    temp_artist = filtered_df['artist'].astype(str).str.replace(r'\s+', '', regex=True)
-    
-    filtered_df = filtered_df[
-        temp_title.str.contains(search_text_clean, case=False, na=False) |
-        temp_artist.str.contains(search_text_clean, case=False, na=False)
-    ]
+    for token in search_tokens:
+        filtered_df = filtered_df[
+            filtered_df['title'].astype(str).str.contains(token, case=False, na=False) |
+            filtered_df['artist'].astype(str).str.contains(token, case=False, na=False) |
+            filtered_df['lyrics'].astype(str).str.contains(token, case=False, na=False)
+        ]
 
 # 가중치 산출 함수
 def calculate_match_score(row, selected_kws):
@@ -93,7 +93,7 @@ def calculate_match_score(row, selected_kws):
             total_score += (order_weight * 2)
     return total_score
 
-# [수정 2] 다중 키워드 AND 조건 적용
+# 다중 키워드 AND 조건 적용
 if selected_keywords:
     for kw in selected_keywords:
         filtered_df = filtered_df[
@@ -102,7 +102,6 @@ if selected_keywords:
             (filtered_df['keyword_3'] == kw)
         ]
     
-    # 남은 교집합 곡들에 대해 서순 가중치 계산 및 정렬
     filtered_df['match_score'] = filtered_df.apply(lambda r: calculate_match_score(r, selected_keywords), axis=1)
     filtered_df = filtered_df.sort_values(by=["match_score", "popularity_score"], ascending=[False, False])
 else:
